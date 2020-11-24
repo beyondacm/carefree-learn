@@ -81,13 +81,16 @@ class DDR(FCNN):
 
     def _init_config(self) -> None:
         self.config.setdefault("ema_decay", 0.999)
+        self.default_unit = self.config.setdefault("default_unit", 512)
         # common mapping configs
         self._common_configs = self.config.setdefault("common_configs", {})
         self._common_configs.setdefault("pruner_config", None)
         self._common_configs.setdefault("batch_norm", False)
         self._common_configs.setdefault("dropout", 0.0)
         # feature mappings
-        self.feature_units = self.config.setdefault("feature_units", [512, 512])
+        self.feature_units = self.config.setdefault(
+            "feature_units", [self.default_unit, self.default_unit]
+        )
         mapping_configs = self.config.setdefault("mapping_configs", {})
         if isinstance(mapping_configs, dict):
             mapping_configs.setdefault("activation", "mish")
@@ -96,7 +99,7 @@ class DDR(FCNN):
             mapping_configs.setdefault("dropout", 0.0)
             mapping_configs.setdefault("bias", False)
             mapping_configs = [mapping_configs] * self.num_feature_layers
-        self.median_units = self.config.setdefault("median_units", [512])
+        self.median_units = self.config.setdefault("median_units", [self.default_unit])
         self._q_reg_activation = self.config.setdefault(
             "quantile_reg_activation", "ReLU"
         )
@@ -229,7 +232,7 @@ class DDR(FCNN):
         if not self.no_joint_features:
             cdf_input_dim += self.feature_dim
         # regression part
-        cdf_reg_units = self.config.setdefault("cdf_reg_units", [512])
+        cdf_reg_units = self.config.setdefault("cdf_reg_units", [self.default_unit])
         if not cdf_reg_units:
             self.cdf_reg = Linear(cdf_input_dim, 1, **self._common_configs)
         else:
@@ -271,7 +274,9 @@ class DDR(FCNN):
         self.mish = activations.mish
         self.relu = activations.ReLU
         # median residual part
-        median_residual_units = self.config.setdefault("median_residual_units", [512])
+        median_residual_units = self.config.setdefault(
+            "median_residual_units", [self.default_unit]
+        )
         bundle = self._init_mlp_config("median_residual", True, self._q_reg_activation)
         mapping_configs, final_mapping_config = bundle
         self.median_residual_reg = self._make_projection(
@@ -284,7 +289,9 @@ class DDR(FCNN):
         self.__reg_params.extend(self.median_residual_reg.parameters())
         # quantile residual regression part
         qr_input_dim = quantile_input_dim + 1
-        qr_reg_units = self.config.setdefault("quantile_res_reg_units", [512])
+        qr_reg_units = self.config.setdefault(
+            "quantile_res_reg_units", [self.default_unit]
+        )
         mapping_configs, final_mapping_config = self._init_mlp_config(
             "quantile_res_reg", True, self._q_reg_activation
         )
