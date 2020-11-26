@@ -82,7 +82,7 @@ if __name__ == '__main__':
     print("accuracy:", (y_cv == predictions).mean())
 
     # estimate with `cflearn`
-    cflearn.estimate(
+    cflearn.evaluate(
         x_cv,
         y_cv,
         pipelines=fcnn,
@@ -141,7 +141,7 @@ m.predict(x)
 # Make probability predictions
 m.predict_prob(x)
 # Estimate performance
-cflearn.estimate(x, y, pipelines=m)
+cflearn.evaluate(x, y, pipelines=m)
 ```
 
 Then you will see something like this:
@@ -169,7 +169,7 @@ Of course, loading `carefree-learn` models are easy too!
 ```python
 m = cflearn.load()
 # You will see exactly the same result as above!
-cflearn.estimate(x, y, pipelines=m)
+cflearn.evaluate(x, y, pipelines=m)
 ```
 
 `carefree-learn` can also easily fit / predict / estimate directly on files (file-in, file-out). Suppose we have an 'xor.txt' file with following contents:
@@ -189,7 +189,7 @@ Then `carefree-learn` can be utilized with only one line of code:
 
 ```python
 m = cflearn.make(delim=",", skip_first=False).fit("xor.txt", x_cv="xor.txt")
-cflearn.estimate("xor.txt", pipelines=m)
+cflearn.evaluate("xor.txt", pipelines=m)
 ```
 
 After which you will see something like this:
@@ -233,7 +233,7 @@ if __name__ == '__main__':
     # And it is fairly straight forward to apply stacking ensemble
     ensemble = cflearn.Ensemble.stacking(patterns)
     patterns_dict = {"fcnn_3": patterns, "fcnn_3_ensemble": ensemble}
-    cflearn.estimate(x, y, metrics=["acc", "auc"], other_patterns=patterns_dict)
+    cflearn.evaluate(x, y, metrics=["acc", "auc"], other_patterns=patterns_dict)
 ```
 
 Then you will see something like this:
@@ -268,7 +268,7 @@ if __name__ == '__main__':
     )
     # We can further train our model with the best hyper-parameters we've obtained:
     m = cflearn.make(**hpo.best_param).fit(x, y)
-    cflearn.estimate(x, y, pipelines=m)
+    cflearn.evaluate(x, y, pipelines=m)
 ```
 
 Then you will see something like this:

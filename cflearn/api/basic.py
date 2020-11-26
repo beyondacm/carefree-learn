@@ -242,7 +242,7 @@ def _to_pipelines(pipelines: pipelines_type) -> Dict[str, Pipeline]:
     return pipelines
 
 
-def estimate(
+def evaluate(
     x: data_type,
     y: data_type = None,
     *,
@@ -585,7 +585,7 @@ __all__ = [
     "make",
     "save",
     "load",
-    "estimate",
+    "evaluate",
     "load_task",
     "repeat_with",
     "tasks_to_pipelines",
