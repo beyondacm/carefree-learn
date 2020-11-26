@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from typing import Any
+from typing import List
 from typing import Union
 from typing import Optional
 from cftool.misc import show_or_save
@@ -33,8 +34,8 @@ class DDRPredictor:
             return predictions
         return predictions["cdf"]
 
-    def quantile(self, x: data_type, q: float) -> np.ndarray:
-        predictions = self.m.predict(x, q=q, predict_quantile=True, return_all=True)
+    def quantile(self, x: data_type, q: Union[float, List[float]]) -> np.ndarray:
+        predictions = self.m.predict(x, q=q, predict_quantiles=True, return_all=True)
         return predictions["quantiles"]
 
 
@@ -108,9 +109,9 @@ class DDRVisualizer:
             DDRVisualizer._render_figure(*render_args)
         # quantile curves
         if quantiles is not None:
-            for q in quantiles:
-                quantile_curve = self.predictor.quantile(x_base, q)
-                plt.plot(x_base.ravel(), quantile_curve, label=f"quantile {q:4.2f}")
+            quantile_curves = self.predictor.quantile(x_base, quantiles)
+            for q, q_curve in zip(quantiles, quantile_curves.T):
+                plt.plot(x_base.ravel(), q_curve, label=f"quantile {q:4.2f}")
             DDRVisualizer._render_figure(*render_args)
         # cdf curves
         if anchor_ratios is not None:
@@ -175,12 +176,12 @@ class DDRVisualizer:
                 _core(dual_predictions, dual=True)
 
         if quantiles is not None:
-            for quantile in quantiles:
-                yq = np.percentile(y_matrix, int(100 * quantile), axis=1)
-                yq_pred = self.predictor.quantile(x_base, quantile)
+            yq_predictions = self.predictor.quantile(x_base, quantiles)
+            for q, yq_pred in zip(quantiles, yq_predictions.T):
+                yq = np.percentile(y_matrix, int(100 * q), axis=1)
                 # yqd_pred = ddr.quantile(quantile, x_base, inference_only=True)
                 yqd_pred = None
-                _plot("quantile", quantile, yq, yq_pred, yqd_pred)
+                _plot("quantile", q, yq, yq_pred, yqd_pred)
             plt.figure()
             for quantile in [0.25, 0.5, 0.75]:
                 yq = np.percentile(y_matrix, int(100 * quantile), axis=1)
