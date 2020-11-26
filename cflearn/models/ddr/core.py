@@ -968,7 +968,7 @@ class DDR(FCNN):
             init = init.view(init.shape[0], -1)
         predict_pdf, predict_cdf = map(kwargs.get, ["predict_pdf", "predict_cdf"])
         predict_quantile, predict_median_residual = map(
-            kwargs.get, ["predict_quantile", "predict_median_residual"]
+            kwargs.get, ["predict_quantiles", "predict_median_residual"]
         )
         if predict_pdf or predict_cdf:
             y = kwargs.get("y")
@@ -985,8 +985,12 @@ class DDR(FCNN):
             q = kwargs.get("q")
             if q is None:
                 raise ValueError(f"quantile cannot be predicted without q")
-            q_batch = self._expand(len(init), q)
-            forward_dict["quantile"] = self._predict_quantile(init, q_batch)
+            q_list = [q] if isinstance(q, float) else q
+            quantile_list = []
+            for q in q_list:
+                q_batch = self._expand(len(init), q)
+                quantile_list.append(self._predict_quantile(init, q_batch))
+            forward_dict["quantiles"] = torch.cat(quantile_list, dim=1)
         if predict_median_residual:
             expand = lambda sign: self._expand(len(init), sign)
             sign_batch = torch.cat(list(map(expand, [1, -1])))

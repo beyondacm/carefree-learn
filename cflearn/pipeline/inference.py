@@ -368,13 +368,21 @@ class Inference(LoggingMixin):
         if self.data.is_reg:
             recover = partial(self.data.recover_labels, inplace=True)
             if not return_all:
-                predictions = collated["predictions"]
+                return_key = kwargs.get("return_key", "predictions")
+                predictions = collated[return_key]
                 if requires_recover:
-                    return recover(predictions)
+                    if predictions.shape[1] == 1:
+                        return recover(predictions)
+                    return np.apply_along_axis(recover, 1, predictions).squeeze()
                 return predictions
             if not requires_recover:
                 return collated
-            return {k: recover(v) for k, v in collated.items()}
+            recovered = {}
+            for k, v in collated.items():
+                if v.shape[1] != 1:
+                    v = np.apply_along_axis(recover, 1, v).squeeze()
+                recovered[k] = v
+            return recovered
 
         # classification
         def _return(new_predictions: np.ndarray) -> Union[np.ndarray, np_dict_type]:

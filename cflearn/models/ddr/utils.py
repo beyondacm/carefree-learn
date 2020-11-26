@@ -35,7 +35,7 @@ class DDRPredictor:
 
     def quantile(self, x: data_type, q: float) -> np.ndarray:
         predictions = self.m.predict(x, q=q, predict_quantile=True, return_all=True)
-        return predictions["quantile"]
+        return predictions["quantiles"]
 
 
 class DDRVisualizer:
