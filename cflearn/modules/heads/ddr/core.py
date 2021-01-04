@@ -61,7 +61,7 @@ class DDRHead(HeadBase):
         if not self.fetch_cdf:
             self.y_interact = None
             self.y_affine_head = None
-            self.y_logit_anchor = None
+            self.cdf_logit_anchor = None
         else:
             self.y_interact = MonoInteract(num_units)
             self.y_affine_head = AffineHead(latent_dim)
@@ -119,7 +119,7 @@ class DDRHead(HeadBase):
         do_inverse: bool = False,
     ) -> tensor_dict_type:
         y_latent = self.y_interact(y_res, median_outputs.nets)  # type: ignore
-        affine = self.y_affine_head(y_latent, self.y_logit_anchor)  # type: ignore
+        affine = self.y_affine_head(y_latent, self.cdf_logit_anchor)  # type: ignore
         q_logit = affine.out
         q = self.q_inv_fn(q_logit)
         results = {

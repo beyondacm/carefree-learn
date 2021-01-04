@@ -167,6 +167,9 @@ class DDR(ModelBase):
             "cdf_logit_mul": ddr_results["q_logit_mul"],  # type: ignore
             "cdf_logit_add": ddr_results["q_logit_add"],  # type: ignore
             "y_inverse_res": ddr_results["y_inverse_res"],  # type: ignore
+            "median": ddr_results["median"],  # type: ignore
+            "pos_med_res": ddr_results["pos_med_res"],  # type: ignore
+            "neg_med_res": ddr_results["neg_med_res"],  # type: ignore
         }
 
     def _core(
