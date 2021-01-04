@@ -29,8 +29,8 @@ class DDRLoss(LossBase, LoggingMixinWithRank):
         median = forward_results["predictions"]
         median_losses = l1_loss(median, target, reduction="none")
         # median residual
-        pos_med_res = forward_results["med_pos_med_res"]
-        neg_med_res = forward_results["med_neg_med_res"]
+        pos_med_res = forward_results["pos_med_res"]
+        neg_med_res = forward_results["neg_med_res"]
         target_median_residual = target - median.detach()
         tmr_sign_mask = torch.sign(target_median_residual) > 0
         mr_prediction = torch.where(tmr_sign_mask, pos_med_res, -neg_med_res)
@@ -46,15 +46,18 @@ class DDRLoss(LossBase, LoggingMixinWithRank):
     ) -> tensor_dict_type:
         # median residual anchor
         if is_synthetic:
-            syn_med_mul = forward_results["syn_med_mul"].abs()
-            return {"median_residual_anchor": (syn_med_mul.abs() - 1.0).abs()}
+            pos_med_res = forward_results["pos_med_res"]
+            neg_med_res = forward_results["neg_med_res"]
+            med_res = torch.where(forward_results["q_sign"], pos_med_res, neg_med_res)
+            mr_anchor_losses = (med_res.detach() - forward_results["y_res"]).abs()
+            return {"median_residual_anchor": mr_anchor_losses}
         # quantile
         q_batch = forward_results["q_batch"]
         assert q_batch is not None
         y_res = forward_results["y_res"]
         assert y_res is not None and target_median_residual is not None
         quantile_losses = self._quantile_losses(y_res, target_median_residual, q_batch)
-        return {"quantile": quantile_losses}
+        return {"quantile_loss": quantile_losses}
 
     def _y_losses(
         self,

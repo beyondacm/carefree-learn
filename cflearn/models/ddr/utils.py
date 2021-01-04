@@ -107,7 +107,9 @@ class DDRVisualizer:
         *,
         median_residual: bool = False,
         mul_affine: bool = False,
+        add_affine: bool = False,
         cdf_logit_mul: bool = False,
+        cdf_logit_add: bool = False,
         q_batch: Optional[np.ndarray] = None,
         y_batch: Optional[np.ndarray] = None,
         to_pdf: bool = False,
@@ -138,23 +140,24 @@ class DDRVisualizer:
         # quantile curves
         if q_batch is not None and model.fetch_q:
             q_list = q_batch.tolist()
-            if not mul_affine:
+            if not mul_affine and not add_affine:
                 quantile_curves = self.predictor.quantile(x_base, q_list)["quantiles"]
                 for q, quantile_curve in zip(q_list, quantile_curves.T):
                     plt.plot(x_base.ravel(), quantile_curve, label=f"quantile {q:4.2f}")
                 DDRVisualizer._render_figure(*render_args)
             else:
                 med_predictions = self.predictor.quantile(x_base, q_list, recover=False)
-                med_mul_cat = med_predictions["med_mul"]
-                for q, med_mul in zip(q_batch, med_mul_cat.T):
-                    plt.plot(x_base.ravel(), med_mul, label=f"med_mul {q:4.2f}")
+                key = "med_mul" if mul_affine else "med_add"
+                med_cat = med_predictions[key]
+                for q, med in zip(q_batch, med_cat.T):
+                    plt.plot(x_base.ravel(), med, label=f"{key} {q:4.2f}")
                 DDRVisualizer._render_figure(*render_args)
         # cdf curves
         if y_batch is not None and model.fetch_cdf:
             y_abs_max = np.abs(y).max()
             ratios = y_batch
             anchors = [ratio * (y_max - y_min) + y_min for ratio in y_batch]
-            if not cdf_logit_mul:
+            if not cdf_logit_mul and not cdf_logit_add:
                 for ratio, anchor in zip(ratios, anchors):
                     anchor_line = np.full(len(x_base), anchor)
                     predictions = self.predictor.cdf(x_base, anchor, get_pdf=to_pdf)
@@ -175,8 +178,9 @@ class DDRVisualizer:
             else:
                 for ratio, anchor in zip(ratios, anchors):
                     cdf_predictions = self.predictor.cdf(x_base, anchor)
-                    cdf_logit_mul = cdf_predictions["cdf_logit_mul"]
-                    label = f"cdf_logit_mul {ratio:4.2f}"
+                    key = "cdf_logit_mul" if cdf_logit_mul else "cdf_logit_add"
+                    cdf_logit_mul = cdf_predictions[key]
+                    label = f"{key} {ratio:4.2f}"
                     plt.plot(x_base.ravel(), cdf_logit_mul, label=label)
                 DDRVisualizer._render_figure(*render_args)
         show_or_save(export_path, fig)

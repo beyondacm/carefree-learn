@@ -490,55 +490,6 @@ class DNDF(Module):
         nn.init.xavier_uniform_(self.leaves.data)
 
 
-class CrossBase(Module, metaclass=ABCMeta):
-    @abstractmethod
-    def forward(self, x: Tensor, x0: Tensor) -> Tensor:
-        pass
-
-
-class InnerCross(CrossBase):
-    def __init__(self, dim: int, **kwargs: Any):
-        super().__init__()
-        self.inner = Linear(dim, 1, bias=False, **kwargs)
-
-    def forward(self, x: Tensor, x0: Tensor) -> Tensor:
-        return x0 * self.inner(x)
-
-
-class CrossBlock(Module):
-    def __init__(
-        self,
-        dim: int,
-        bias: bool = True,
-        residual: bool = True,
-        *,
-        cross_builder: Callable[[int], Module] = None,
-        **kwargs: Any,
-    ):
-        super().__init__()
-        if cross_builder is None:
-            cross_builder = lambda dim_: InnerCross(dim_)
-        self.cross = cross_builder(dim)
-        if not bias:
-            self.bias = None
-        else:
-            self.bias = nn.Parameter(torch.empty(1, dim))
-            with torch.no_grad():
-                self.bias.data.fill_(kwargs.get("bias_fill", 0.0))
-        self.residual = residual
-
-    def forward(self, x: Tensor, x0: Tensor) -> Tensor:
-        crossed = self.cross(x, x0)
-        if self.residual:
-            crossed = crossed + x
-        if self.bias is None:
-            return crossed
-        return crossed + self.bias
-
-    def extra_repr(self) -> str:
-        return f"(bias): {False if self.bias is None else True}"
-
-
 class TreeResBlock(Module):
     def __init__(self, dim: int, dndf_config: Optional[Dict[str, Any]] = None):
         super().__init__()
@@ -554,98 +505,6 @@ class TreeResBlock(Module):
         res = self.inner_dndf(res)
         res = self.dim * res - 1.0
         return net + res
-
-
-class InvertibleBlock(Module):
-    def __init__(
-        self,
-        dim: int,
-        *,
-        default_activation: str = "mish",
-        transition_builder: Callable[[int], Module] = None,
-    ):
-        if dim % 2 != 0:
-            raise ValueError("`dim` should be divided by 2")
-        super().__init__()
-        h_dim = int(dim // 2)
-        # transition
-        if transition_builder is not None:
-            transition = transition_builder(dim)
-        else:
-            transition = MLP.simple(
-                h_dim,
-                None,
-                [h_dim],
-                activation=default_activation,
-            )
-        self.transition = transition
-
-    def forward(self, net1: Tensor, net2: Tensor) -> tensor_tuple_type:
-        net1 = net1 + self.transition(net2)
-        return net2, net1
-
-    def inverse(self, net1: Tensor, net2: Tensor) -> tensor_tuple_type:
-        net2 = net2 - self.transition(net1)
-        return net2, net1
-
-
-class ConditionalOutput(NamedTuple):
-    net: Tensor
-    cond: Tensor
-    responses: List[Tensor]
-
-
-class PseudoInvertibleBlock(Module):
-    def __init__(
-        self,
-        in_dim: int,
-        latent_dim: int,
-        out_dim: int,
-        *,
-        to_activation: str = "mish",
-        from_activation: str = "mish",
-        to_transition_builder: Optional[Callable[[int, int], Module]] = None,
-        from_transition_builder: Optional[Callable[[int, int], Module]] = None,
-    ):
-        super().__init__()
-        if to_transition_builder is not None:
-            self.to_latent = to_transition_builder(in_dim, latent_dim)
-        else:
-            num_units = [latent_dim, latent_dim, latent_dim]
-            self.to_latent = MLP.simple(
-                in_dim,
-                None,
-                num_units,
-                activation=to_activation,
-            )
-        if from_transition_builder is not None:
-            self.from_latent = from_transition_builder(latent_dim, out_dim)
-        else:
-            self.from_latent = MLP.simple(
-                latent_dim,
-                out_dim,
-                [latent_dim, latent_dim],
-                bias=True,
-                activation=from_activation,
-            )
-
-    def forward(
-        self,
-        net: Union[Tensor, Any],
-        cond: Optional[Union[Tensor, Any]] = None,
-    ) -> Union[Tensor, Any]:
-        if cond is None:
-            return self.to_latent(net)
-        return self.to_latent(net, cond)
-
-    def inverse(
-        self,
-        net: Union[Tensor, Any],
-        cond: Optional[Union[Tensor, Any]] = None,
-    ) -> Union[Tensor, Any]:
-        if cond is None:
-            return self.from_latent(net)
-        return self.from_latent(net, cond)
 
 
 class MonotonousMapping(Module):
@@ -905,59 +764,6 @@ class MonotonousMapping(Module):
         return nn.Sequential(*blocks)
 
 
-class ConditionalBlocks(Module):
-    def __init__(
-        self,
-        main_blocks: ModuleList,
-        condition_blocks: ModuleList,
-        detach_condition: bool = False,
-        *,
-        add_last: bool,
-        cond_mixtures: Optional[ModuleList] = None,
-    ):
-        super().__init__()
-        self.add_last = add_last
-        self.detach_condition = detach_condition
-        self.num_blocks = len(main_blocks)
-        if self.num_blocks != len(condition_blocks):
-            msg = "`main_blocks` and `condition_blocks` should have same sizes"
-            raise ValueError(msg)
-        self.main_blocks = main_blocks
-        self.condition_blocks = condition_blocks
-        self.cond_mixtures = cond_mixtures
-
-    def forward(
-        self,
-        net: Tensor,
-        cond: Union[Tensor, List[Tensor]],
-    ) -> ConditionalOutput:
-        if isinstance(cond, list):
-            cond_responses = cond
-            detached_responses = [net.detach() for net in cond]
-        else:
-            cond_responses = []
-            detached_responses = []
-            for condition in self.condition_blocks:
-                cond = condition(cond)
-                cond_responses.append(cond)  # type: ignore
-                detached_responses.append(cond.detach())  # type: ignore
-        responses = detached_responses if self.detach_condition else cond_responses
-        iterator = enumerate(zip(self.main_blocks, responses))
-        for i, (main, response) in iterator:
-            net = main(net)
-            if i < self.num_blocks - 1 or self.add_last:
-                if self.cond_mixtures is None:
-                    net = net + response
-                else:
-                    net = self.cond_mixtures[i](net, response)
-        return ConditionalOutput(net, cond_responses[-1], responses)
-
-    def extra_repr(self) -> str:
-        add_last = f"(add_last): {self.add_last}"
-        detach_condition = f"(detach_condition): {self.detach_condition}"
-        return f"{add_last}\n{detach_condition}"
-
-
 class AttentionOutput(NamedTuple):
     output: Tensor
     weights: Tensor
@@ -1097,12 +903,7 @@ __all__ = [
     "Mapping",
     "MLP",
     "DNDF",
-    "CrossBlock",
     "TreeResBlock",
-    "InvertibleBlock",
-    "PseudoInvertibleBlock",
     "MonotonousMapping",
-    "ConditionalBlocks",
-    "ConditionalOutput",
     "Attention",
 ]

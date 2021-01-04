@@ -165,6 +165,7 @@ class DDR(ModelBase):
             "pdf": pdf,
             "cdf_logit": ddr_results["q_logit"],  # type: ignore
             "cdf_logit_mul": ddr_results["q_logit_mul"],  # type: ignore
+            "cdf_logit_add": ddr_results["q_logit_add"],  # type: ignore
             "y_inverse_res": ddr_results["y_inverse_res"],  # type: ignore
         }
 
@@ -199,26 +200,19 @@ class DDR(ModelBase):
                 n_repeat = int(batch_size / len(q_batch)) + 1
                 q_batch = q_batch.repeat_interleave(n_repeat, dim=0)[:batch_size]
                 y_batch = y_batch.repeat_interleave(n_repeat, dim=0)[:batch_size]
-        # build predictions
-        with timing_context(self, "forward.median"):
-            median_rs = {}
-            rs = self._median(split)
-            if not synthetic:
-                median_rs = {
-                    "predictions": rs["median"],
-                    "med_pos_med_res": rs["pos_med_res"],
-                    "med_neg_med_res": rs["neg_med_res"],
-                }
         # synthetic predictions
+        rs = {}
         with timing_context(self, "forward.synthetic"):
             if synthetic:
                 if self.fetch_q:
                     assert q_synthetic_batch is not None
-                    q_rs = self._quantile(split, q_synthetic_batch, True)
-                    median_rs["syn_med_mul"] = q_rs["med_mul"]
+                    rs.update(self._quantile(split, q_synthetic_batch, True))
                     if not self.fetch_cdf:
-                        return median_rs
+                        return rs
                 if self.fetch_cdf:
+                    if not rs:
+                        with eval_context(self):
+                            rs = self._median(split)
                     median = rs["median"].detach()
                     pos_med_res = rs["pos_med_res"]
                     neg_med_res = rs["neg_med_res"]
@@ -227,14 +221,14 @@ class DDR(ModelBase):
                     y_syn_batch = y_syn_batch.detach() + median
                     y_rs = self._cdf(split, y_syn_batch, False, False, False)
                     y_med_rs = self._cdf(split, median, False, False, False)
-                    median_rs.update(
+                    rs.update(
                         {
                             "syn_cdf_logit_mul": y_rs["cdf_logit_mul"],
                             "syn_med_cdf_logit_mul": y_med_rs["cdf_logit_mul"],
                         }
                     )
                     if not self.fetch_q:
-                        return median_rs
+                        return rs
         # TODO : Some of the calculations in `forward.median` could be reused
         with timing_context(self, "forward.quantile"):
             if not self.fetch_q:
@@ -250,11 +244,11 @@ class DDR(ModelBase):
         # construct results
         net = list(self._transform_cache.values())[0]
         results: tensor_dict_type = {"net": net, "q_batch": q_batch, "y_batch": y_batch}
-        results.update({k: v for k, v in median_rs.items() if v is not None})
         results.update({k: v for k, v in q_rs.items() if v is not None})
         results.update({k: v for k, v in y_rs.items() if v is not None})
-        for key in set(median_rs.keys()) | set(q_rs.keys()) | set(y_rs.keys()):
+        for key in set(rs.keys()) | set(q_rs.keys()) | set(y_rs.keys()):
             results.setdefault(key, None)
+        results["predictions"] = results["median"]
         return results
 
     def _predict_quantile(
@@ -272,18 +266,24 @@ class DDR(ModelBase):
             q = kwargs.get("q")
         if q is None:
             raise ValueError(f"quantile cannot be predicted without q")
-        quantiles_list, med_mul_list = [], []
+        quantiles_list, med_mul_list, med_add_list = [], [], []
         q_list = [q] if isinstance(q, float) else q
         for q in q_list:
             q_batch = self._expand(batch_size, q)
             pack = self._quantile(split, q_batch, False)
             quantiles_list.append(pack["median"] + pack["y_res"])
             med_mul_list.append(pack["med_mul"])
+            med_add_list.append(pack["med_add"])
         if len(q_list) == 1:
-            return {"quantiles": quantiles_list[0], "med_mul": med_mul_list[0]}
+            return {
+                "quantiles": quantiles_list[0],
+                "med_mul": med_mul_list[0],
+                "med_add": med_add_list[0],
+            }
         return {
             "quantiles": torch.cat(quantiles_list, dim=1),
             "med_mul": torch.cat(med_mul_list, dim=1),
+            "med_add": torch.cat(med_add_list, dim=1),
         }
 
     # API
@@ -333,6 +333,8 @@ class DDR(ModelBase):
         if getting_metrics and self.quantile_metric_config is not None:
             q = self.quantile_metric_config["q"]
             forward_dict.update(self._predict_quantile(split, batch_size, kwargs, q))
+            if "predictions" not in forward_dict:
+                forward_dict["predictions"] = self._median(split)["median"]
         # forward
         return_loss = kwargs.get("return_loss", False)
         if return_loss or not forward_dict:

@@ -99,6 +99,8 @@ def test() -> None:
             visualizer.visualize(x_cv, y_cv, export_path, **q_kwargs)
             export_path = _get_file(local_export_folder, "med_mul.png")
             visualizer.visualize(x_cv, y_cv, export_path, mul_affine=True, **q_kwargs)
+            export_path = _get_file(local_export_folder, "med_add.png")
+            visualizer.visualize(x_cv, y_cv, export_path, add_affine=True, **q_kwargs)
             # cdf
             y_kwargs = {"y_batch": y_batch, "padding": padding}
             cdf_path = _get_file(local_export_folder, "cdf.png")
@@ -111,6 +113,14 @@ def test() -> None:
                 y_cv,
                 export_path,
                 cdf_logit_mul=True,
+                **y_kwargs,
+            )
+            export_path = _get_file(local_export_folder, "cdf_logit_add.png")
+            visualizer.visualize(
+                x_cv,
+                y_cv,
+                export_path,
+                cdf_logit_add=True,
                 **y_kwargs,
             )
             # multiple

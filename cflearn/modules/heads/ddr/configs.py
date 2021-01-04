@@ -10,8 +10,7 @@ class DefaultDDRConfig(HeadConfigs):
         return {
             "fetch_q": True,
             "fetch_cdf": True,
-            "num_layers": 1,
-            "num_blocks": 2,
+            "num_layers": 2,
             "latent_dim": 512,
         }
 
