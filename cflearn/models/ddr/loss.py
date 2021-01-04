@@ -27,16 +27,18 @@ class DDRLoss(LossBase, LoggingMixinWithRank):
     ) -> Tuple[torch.Tensor, tensor_dict_type]:
         # median
         median = forward_results["predictions"]
-        median_losses = l1_loss(median, target, reduction="none")
+        target_median_residual = target - median
+        tmr_detach = target_median_residual.detach()
+        tmr_sign = torch.sign(tmr_detach)
+        median_losses = target_median_residual * tmr_sign
         # median residual
         pos_med_res = forward_results["pos_med_res"]
         neg_med_res = forward_results["neg_med_res"]
-        target_median_residual = target - median.detach()
-        tmr_sign_mask = torch.sign(target_median_residual) > 0
+        tmr_sign_mask = tmr_sign > 0
         mr_prediction = torch.where(tmr_sign_mask, pos_med_res, -neg_med_res)
         mr_losses = torch.abs(target_median_residual - mr_prediction)
         losses_dict = {"median": median_losses, "median_residual": mr_losses}
-        return target_median_residual, losses_dict
+        return tmr_detach, losses_dict
 
     def _q_losses(
         self,
