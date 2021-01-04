@@ -179,9 +179,8 @@ class DDRVisualizer:
                 for ratio, anchor in zip(ratios, anchors):
                     cdf_predictions = self.predictor.cdf(x_base, anchor)
                     key = "cdf_logit_mul" if cdf_logit_mul else "cdf_logit_add"
-                    cdf_logit_mul = cdf_predictions[key]
                     label = f"{key} {ratio:4.2f}"
-                    plt.plot(x_base.ravel(), cdf_logit_mul, label=label)
+                    plt.plot(x_base.ravel(), cdf_predictions[key], label=label)
                 DDRVisualizer._render_figure(*render_args)
         show_or_save(export_path, fig)
 
