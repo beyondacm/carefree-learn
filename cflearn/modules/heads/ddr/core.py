@@ -38,11 +38,13 @@ class DDRHead(HeadBase):
         num_units = [latent_dim] * num_layers
         if mapping_configs is None:
             mapping_configs = {}
-        mapping_configs.setdefault("dropout", 0.0)
-        activation = mapping_configs.setdefault("activation", "glu")
-        if activation == "glu":
-            mapping_configs["activation_config"] = {"in_dim": latent_dim, "bias": True}
-        mapping_configs.setdefault("batch_norm", False)
+        if isinstance(mapping_configs, dict):
+            mapping_configs.setdefault("dropout", 0.0)
+            activation = mapping_configs.setdefault("activation", "glu")
+            if activation == "glu":
+                activation_config = {"in_dim": latent_dim, "bias": True}
+                mapping_configs["activation_config"] = activation_config
+            mapping_configs.setdefault("batch_norm", False)
         self.median_backbone = MLP(
             in_dim,
             3,
@@ -88,14 +90,14 @@ class DDRHead(HeadBase):
         do_inverse: bool = False,
     ) -> tensor_dict_type:
         q_batch = self.q_fn(q_batch)
-        q_latent = self.q_interact(q_batch, median_outputs.nets)
+        q_latent = self.q_interact(q_batch, median_outputs.nets)  # type: ignore
         q_sign = q_batch > 0.5
         med_res = torch.where(
             q_sign,
             median_outputs.pos_med_res,
             median_outputs.neg_med_res,
         )
-        affine = self.q_affine_head(q_latent, med_res.detach())
+        affine = self.q_affine_head(q_latent, med_res.detach())  # type: ignore
         y_res = affine.out
         results = {
             "q_sign": q_sign,
@@ -116,8 +118,8 @@ class DDRHead(HeadBase):
         median_outputs: MedianOutputs,
         do_inverse: bool = False,
     ) -> tensor_dict_type:
-        y_latent = self.y_interact(y_res, median_outputs.nets)
-        affine = self.y_affine_head(y_latent, self.y_logit_anchor)
+        y_latent = self.y_interact(y_res, median_outputs.nets)  # type: ignore
+        affine = self.y_affine_head(y_latent, self.y_logit_anchor)  # type: ignore
         q_logit = affine.out
         q = self.q_inv_fn(q_logit)
         results = {

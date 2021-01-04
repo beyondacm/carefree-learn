@@ -14,7 +14,7 @@ class MonoInteract(Module):
         super().__init__()
         in_dim = 1
         self.blocks = ModuleList(
-            MonotonousMapping.stack(
+            MonotonousMapping.stack(  # type: ignore
                 in_dim,
                 None,
                 num_units,
@@ -48,8 +48,8 @@ class AffineHead(Module):
             use_couple_bias=False,
             bias=False,
         )
-        self.mul_head = make()
-        self.add_head = make()
+        self.mul_head: Module = make()  # type: ignore
+        self.add_head: Module = make()  # type: ignore
 
     def forward(self, latent: Tensor, net: Tensor) -> AffineResults:
         mul = self.mul_head(latent)
