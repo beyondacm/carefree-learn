@@ -351,7 +351,7 @@ class DDR(ModelBase):
         state: Optional[TrainerState],
     ) -> tensor_dict_type:
         labels = batch[self.labels_key]
-        losses, losses_dict = self.loss(forward_results, labels)
+        losses_dict = self.loss(forward_results, labels)
         net = forward_results["net"]
         if (
             self.training
@@ -375,14 +375,13 @@ class DDR(ModelBase):
                     True,
                 )
             with timing_context(self, "synthetic.loss"):
-                syn_losses, syn_losses_dict = self.loss._core(  # type: ignore
+                syn_losses_dict = self.loss(  # type: ignore
                     synthetic_outputs,
                     labels,
                     is_synthetic=True,
                 )
             losses_dict.update(syn_losses_dict)
-            losses = losses + syn_losses
-        losses_dict["loss"] = losses
+            losses_dict["loss"] = losses_dict["loss"] + syn_losses_dict["loss"]
         losses_dict = {k: v.mean() for k, v in losses_dict.items()}
         if not self.training and self.fetch_q:
             q_losses = []
@@ -394,7 +393,7 @@ class DDR(ModelBase):
                 yq = pack["y_res"] + pack["median"]
                 q_losses.append(self.q_metric.metric(labels, to_numpy(yq)))
             quantile_metric = -sum(q_losses) / len(q_losses) * self.q_metric.sign
-            ddr_loss = torch.tensor([quantile_metric], dtype=torch.float32)
+            ddr_loss = torch.tensor(quantile_metric, dtype=torch.float32)
             losses_dict["ddr"] = ddr_loss
         self.clear_execute_cache()
         return losses_dict

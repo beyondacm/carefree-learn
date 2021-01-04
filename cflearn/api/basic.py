@@ -25,6 +25,7 @@ from ..types import data_type
 from ..types import general_config_type
 from ..configs import _parse_config
 from ..trainer import Trainer
+from ..trainer import TrainerCallback
 from ..trainer import IntermediateResults
 from ..pipeline import Pipeline
 from ..protocol import DataProtocol
@@ -64,13 +65,25 @@ class _PipeConfigManager:
     def transform_config(self) -> Dict[str, Any]:
         return self.meta_config.setdefault("transform", {})
 
+    @transform_config.setter
+    def transform_config(self, value: Dict[str, Any]) -> None:
+        self.meta_config["transform"] = value
+
     @property
     def extractor_config(self) -> Dict[str, Any]:
         return self.meta_config.setdefault("extractor", {})
 
+    @extractor_config.setter
+    def extractor_config(self, value: Dict[str, Any]) -> None:
+        self.meta_config["extractor"] = value
+
     @property
     def head_config(self) -> Dict[str, Any]:
         return self.meta_config.setdefault("head", {})
+
+    @head_config.setter
+    def head_config(self, value: Dict[str, Any]) -> None:
+        self.meta_config["head"] = value
 
     def replace(self, **kwargs: Any) -> None:
         pipe_config_dict = self.pipe_config._asdict()
@@ -565,6 +578,10 @@ def make_toy_model(
     return make(**updated).fit(*data_tuple)
 
 
+def switch_trainer_callback(callback_base: Type[TrainerCallback]) -> None:
+    Trainer.callback_base = callback_base
+
+
 __all__ = [
     "make",
     "ModelConfig",
@@ -577,6 +594,7 @@ __all__ = [
     "load_experiment_results",
     "repeat_with",
     "make_toy_model",
+    "switch_trainer_callback",
     "Task",
     "Experiment",
     "ModelPattern",

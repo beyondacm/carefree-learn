@@ -19,8 +19,6 @@ class FCNN(ModelBase):
 class QuantileFCNN(ModelBase):
     def _init_config(self) -> None:
         super()._init_config()
-        self.fetch_q = True
-        self.fetch_cdf = False
         quantiles = self.config.setdefault("quantiles", [10, 30, 50, 70, 90])
         quantiles = list(map(int, map(round, quantiles)))
         try:
@@ -30,8 +28,7 @@ class QuantileFCNN(ModelBase):
         self.quantiles = quantiles
         self.config["loss"] = "quantile"
         self.config["loss_config"] = {"q": [q / 100 for q in quantiles]}
-        fcnn = self.pipe_configs.setdefault("fcnn", {})
-        head_config = fcnn.setdefault("head", {})
+        head_config = self.get_pipe_config("fcnn", "head")
         head_config["out_dim"] = len(quantiles)
 
     def forward(

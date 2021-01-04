@@ -1,6 +1,7 @@
 from .hpo import *
 from .zoo import *
 from .auto import *
+from .dist import *
 from .basic import *
 from .ensemble import *
 from .register import *
@@ -32,11 +33,14 @@ __all__ = [
     "load_experiment_results",
     "repeat_with",
     "make_toy_model",
+    "switch_trainer_callback",
     "Task",
     "Experiment",
     "ModelPattern",
     "EnsemblePattern",
     "RepeatResult",
+    # dist
+    "deepspeed",
     # ensemble
     "Ensemble",
     "EnsembleResults",

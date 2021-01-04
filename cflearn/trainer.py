@@ -271,8 +271,9 @@ class TrainMonitor:
             )
             return True
         if self.info["save_checkpoint"]:
-            self.log_msg(f"{self.info['info']}", self.monitored.info_prefix, 3)
-            self.monitored.on_save_checkpoint(new_score)
+            if self.monitored.is_rank_0:
+                self.log_msg(f"{self.info['info']}", self.monitored.info_prefix, 3)
+                self.monitored.on_save_checkpoint(new_score)
         if self.state.should_extend_epoch:
             if self.is_lazy:
                 return True
@@ -359,7 +360,20 @@ class MonitorResults(NamedTuple):
     outputs: Optional[InferenceOutputs]
 
 
+class TrainerCallback:
+    def __init__(self, trainer: "Trainer"):
+        self.trainer = trainer
+
+    def after_step(self, step_outputs: StepOutputs) -> None:
+        pass
+
+    def after_monitor(self, monitor_results: MonitorResults) -> None:
+        pass
+
+
 class Trainer(MonitoredMixin):
+    callback_base = TrainerCallback
+
     def __init__(
         self,
         model: ModelProtocol,
@@ -369,6 +383,7 @@ class Trainer(MonitoredMixin):
     ):
         # common
         self.model = model
+        self.callback = self.callback_base(self)
         self.inference = inference
         self.environment = environment
         self.is_loading = is_loading
@@ -379,7 +394,6 @@ class Trainer(MonitoredMixin):
         self.checkpoint_scores: Dict[str, float] = {}
         self.tr_loader_copy: Optional[PrefetchLoader] = None
         self.intermediate: Optional[IntermediateResults] = None
-        self.intermediate_updated = False
         self.final_results: Optional[IntermediateResults] = None
         self._use_grad_in_predict = False
         self.onnx: Optional[Any] = None
@@ -792,10 +806,9 @@ class Trainer(MonitoredMixin):
         if key in self.schedulers_requires_metric and not (
             isinstance(scheduler, WarmupScheduler) and not scheduler.finished_warmup
         ):
-            if self.intermediate is None or not self.intermediate_updated:
+            if self.intermediate is None:
                 return should_log_lr, None
             kwargs["metrics"] = self.intermediate.final_score
-            self.intermediate_updated = False
             should_log_lr = True
         return should_log_lr, kwargs
 
@@ -862,7 +875,6 @@ class Trainer(MonitoredMixin):
             with timing_context(self, "monitor.get_metrics", enable=self.timing):
                 pack = self.get_metrics(binary_outputs=binary_outputs)
                 outputs, self.intermediate = pack
-                self.intermediate_updated = True
                 if self.state.should_start_monitor_plateau:
                     if not self._monitor.plateau_flag:
                         self.log_msg(  # type: ignore
@@ -955,7 +967,9 @@ class Trainer(MonitoredMixin):
             loss = step_outputs.loss_dict["loss"]
             engine.backward(loss)
         with timing_context(self, "ds.step", enable=self.timing):
-            engine.step()
+            scheduler = list(self.schedulers.values())[0]
+            _, kwargs = self._get_scheduler_settings("all", scheduler)
+            engine.step(lr_kwargs=kwargs)
         return step_outputs
 
     # api
@@ -1012,8 +1026,11 @@ class Trainer(MonitoredMixin):
                     )
                 for i, (batch, batch_indices) in enumerate(step_iterator):
                     self.state.step += 1
-                    self._step(i, batch, batch_indices)
-                    terminate = self._monitor_step().terminate
+                    step_outputs = self._step(i, batch, batch_indices)
+                    self.callback.after_step(step_outputs)
+                    monitor_results = self._monitor_step()
+                    self.callback.after_monitor(monitor_results)
+                    terminate = monitor_results.terminate
                     if terminate:
                         break
             except KeyboardInterrupt:
@@ -1149,30 +1166,16 @@ class Trainer(MonitoredMixin):
     def save_checkpoint(self, score: float, folder: Optional[str] = None) -> None:
         if folder is None:
             folder = self.checkpoint_folder
-        if self.deepspeed:
-            file = fix_float_to_length(score, 8)
-            if os.path.isdir(os.path.join(folder, file)):
-                return None
-            self.model_engines["all"].save_checkpoint(
-                folder,
-                file,
-                client_state={
-                    "step": self.state,
-                    "epoch": self.state.epoch,
-                    "score": score,
-                },
-            )
-        else:
-            # leave top_k snapshots only
-            if self.state.max_snapshot_file > 0:
-                checkpoints = self.model.sorted_checkpoints(folder)
-                if len(checkpoints) >= self.state.max_snapshot_file:
-                    for file in checkpoints[self.state.max_snapshot_file - 1 :]:
-                        self.checkpoint_scores.pop(file)
-                        os.remove(os.path.join(folder, file))
-            # pt
-            file = f"{self.model.pt_prefix}{self.state.epoch}.pt"
-            torch.save(self.model.state_dict(), os.path.join(folder, file))
+        # leave top_k snapshots only
+        if self.state.max_snapshot_file > 0:
+            checkpoints = self.model.sorted_checkpoints(folder)
+            if len(checkpoints) >= self.state.max_snapshot_file:
+                for file in checkpoints[self.state.max_snapshot_file - 1 :]:
+                    self.checkpoint_scores.pop(file)
+                    os.remove(os.path.join(folder, file))
+        # pt
+        file = f"{self.model.pt_prefix}{self.state.epoch}.pt"
+        torch.save(self.model.state_dict(), os.path.join(folder, file))
         # scores
         self.checkpoint_scores[file] = score
         with open(os.path.join(folder, self.model.scores_file), "w") as f:
@@ -1186,17 +1189,14 @@ class Trainer(MonitoredMixin):
     ) -> bool:
         if folder is None:
             folder = self.checkpoint_folder
-        return self.model.restore_checkpoint(
-            folder,
-            strict,
-            self.deepspeed,
-            state_dict_callback,
-        )
+        return self.model.restore_checkpoint(folder, strict, state_dict_callback)
 
 
 __all__ = [
     "IntermediateResults",
     "MonitoredMixin",
     "TrainMonitor",
+    "MonitorResults",
+    "TrainerCallback",
     "Trainer",
 ]
