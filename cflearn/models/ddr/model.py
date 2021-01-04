@@ -380,8 +380,9 @@ class DDR(ModelBase):
                     labels,
                     is_synthetic=True,
                 )
+            syn_loss = syn_losses_dict.pop("loss")
             losses_dict.update(syn_losses_dict)
-            losses_dict["loss"] = losses_dict["loss"] + syn_losses_dict["loss"]
+            losses_dict["loss"] = losses_dict["loss"] + syn_loss
         losses_dict = {k: v.mean() for k, v in losses_dict.items()}
         if not self.training and self.fetch_q:
             q_losses = []
