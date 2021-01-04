@@ -5,7 +5,6 @@ from torch.nn.functional import l1_loss
 from torch.nn.functional import softplus
 
 from ...losses import LossBase
-from ...types import losses_type
 from ...types import tensor_dict_type
 from ...misc.toolkit import LoggingMixinWithRank
 from ...modules.auxiliary import MTL
