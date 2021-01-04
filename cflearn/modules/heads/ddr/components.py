@@ -10,13 +10,13 @@ from ...blocks import MonotonousMapping
 
 
 class MonoInteract(Module):
-    def __init__(self, dim: int, num_units: List[int]):
+    def __init__(self, num_units: List[int]):
         super().__init__()
         in_dim = 1
         self.blocks = ModuleList(
             MonotonousMapping.stack(
                 in_dim,
-                dim,
+                None,
                 num_units,
                 ascent=True,
                 return_blocks=True,
@@ -26,10 +26,8 @@ class MonoInteract(Module):
         )
 
     def forward(self, inp: Tensor, nets: List[Tensor]) -> Tensor:
-        inp = self.blocks[0](inp)
-        for i, block in enumerate(self.blocks[1:]):
-            inp = inp * torch.sigmoid(nets[i])
-            inp = block(inp)
+        for net, block in zip(nets, self.blocks):
+            inp = torch.sigmoid(net) * block(inp)
         return inp
 
 

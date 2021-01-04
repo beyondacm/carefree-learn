@@ -51,14 +51,14 @@ class DDRHead(HeadBase):
             self.q_interact = None
             self.q_affine_head = None
         else:
-            self.q_interact = MonoInteract(latent_dim, num_units)
+            self.q_interact = MonoInteract(num_units)
             self.q_affine_head = AffineHead(latent_dim)
         if not self.fetch_cdf:
             self.y_interact = None
             self.y_affine_head = None
             self.y_logit_anchor = None
         else:
-            self.y_interact = MonoInteract(latent_dim, num_units)
+            self.y_interact = MonoInteract(num_units)
             self.y_affine_head = AffineHead(latent_dim)
             self.register_buffer("cdf_logit_anchor", torch.tensor([math.log(3.0)]))
 
