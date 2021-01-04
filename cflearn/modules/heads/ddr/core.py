@@ -39,6 +39,9 @@ class DDRHead(HeadBase):
         if mapping_configs is None:
             mapping_configs = {}
         mapping_configs.setdefault("dropout", 0.0)
+        activation = mapping_configs.setdefault("activation", "glu")
+        if activation == "glu":
+            mapping_configs["activation_config"] = {"in_dim": latent_dim, "bias": True}
         mapping_configs.setdefault("batch_norm", False)
         self.median_backbone = MLP(
             in_dim,
