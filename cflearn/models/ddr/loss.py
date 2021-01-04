@@ -50,7 +50,7 @@ class DDRLoss(LossBase, LoggingMixinWithRank):
         if is_synthetic:
             pos_med_res = forward_results["pos_med_res"]
             neg_med_res = forward_results["neg_med_res"]
-            med_res = torch.where(forward_results["q_sign"], pos_med_res, neg_med_res)
+            med_res = torch.where(forward_results["q_sign"], pos_med_res, -neg_med_res)
             mr_anchor_losses = (med_res.detach() - forward_results["y_res"]).abs()
             return {"median_residual_anchor": mr_anchor_losses}
         # quantile

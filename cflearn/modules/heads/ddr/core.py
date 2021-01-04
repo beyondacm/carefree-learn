@@ -89,9 +89,9 @@ class DDRHead(HeadBase):
         median_outputs: MedianOutputs,
         do_inverse: bool = False,
     ) -> tensor_dict_type:
+        q_sign = q_batch > 0.5
         q_batch = self.q_fn(q_batch)
         q_latent = self.q_interact(q_batch, median_outputs.nets)  # type: ignore
-        q_sign = q_batch > 0.5
         med_res = torch.where(
             q_sign,
             median_outputs.pos_med_res,
