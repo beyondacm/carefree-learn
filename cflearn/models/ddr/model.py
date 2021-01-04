@@ -62,7 +62,7 @@ class DDR(ModelBase):
         default_metric_weights = {
             "loss": 1.0,
             "ddr": 5.0,
-            "quantile": 1.0,
+            "quantile": 0.2,
             "cdf": 5.0,
             "pdf": 1.0,
             "q_recover": 10.0,
