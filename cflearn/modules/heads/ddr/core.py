@@ -153,7 +153,8 @@ class DDRHead(HeadBase):
         if self.fetch_q and not median and q_batch is not None:
             results.update(self._q_results(q_batch, median_outputs, do_inverse))
         if self.fetch_cdf and not median and y_batch is not None:
-            results.update(self._y_results(y_batch, median_outputs, do_inverse))
+            y_res = y_batch - median_outputs.median.detach()
+            results.update(self._y_results(y_res, median_outputs, do_inverse))
         return results
 
 
